@@ -1,13 +1,18 @@
 {
   pkgs ? import <nixpkgs> {},
-  hasktagsOptions ? "--ctags --follow-symlinks --extendedctag --tags-absolute",
+  hasktagsOptions ? "--ctags --follow-symlinks --extendedctag",
   suffixes ? ["hs" "lhs" "hsc"],
 }:
 with pkgs.lib.lists;
 let
 
-  # format rsync filter rules for haskell files with the desired `suffixes`.
-  suffixesFilter = builtins.concatStringsSep "\n" (map (s: "+ *.${s}") suffixes);
+  # Create a string from the suffixes.
+  concatSuffixes =
+    sep: f:
+    builtins.concatStringsSep sep (map f suffixes);
+
+  # Format rsync filter rules for haskell files with the desired `suffixes`.
+  suffixesFilter = concatSuffixes "\n" (s: "+ *.${s}");
 
   # rsync filter rule file that leaves only haskell library sources, selected by the global parameter `suffixes`.
   rsyncFilter = pkgs.writeText "tags-rsync-filter" ''
@@ -21,48 +26,62 @@ let
     - *
   '';
 
-  # hasktags takes a haskell list for the --suffixes option for some reason
-  suffixesOption = builtins.concatStringsSep ", " (map (s: ''".${s}"'') suffixes);
+  # hasktags takes a haskell list for the --suffixes option for some reason.
+  suffixesOption = concatSuffixes ", " (s: ''".${s}"'');
 
   # Takes a haskell derivation and produces another derivation that reuses the `src` attribute to create tags.
-  # The sources are unpacked and filtered so only non-test etc. haskell files (selecteed by the global parameter
+  # The sources are unpacked and filtered so only non-test etc. haskell files (selected by the global parameter
   # `suffixes`) are present.
   # The remaining files are processed by `hasktags` and stored in the file `tags`.
   # The sources need to remain in the derivation's output for editors to find the tags' locations.
-  packageTags = { name, src, ... }:
-  pkgs.stdenv.mkDerivation {
-    name = "${name}-tags";
-    inherit src;
-    buildInputs = [pkgs.haskellPackages.hasktags pkgs.rsync];
-    phases = ["unpackPhase" "buildPhase"];
-    buildPhase = ''
-      fail() {
-        echo "tags failed for ${name}"
-        rm -f $out/tags
-        touch $out/tags
-      }
-      mkdir -p $out/package
-      rsync --recursive --prune-empty-dirs --filter='. ${rsyncFilter}' . $out/package/
-      hasktags ${hasktagsOptions} --suffixes '[${toString suffixesOption}]' --output $out/tags $out/package || fail
-    '';
-  };
+  # If `hasktags` fails, we don't want want the whole process to be unusable just because there is some weird code in
+  # one of the dependencies, so we just print an error message and output an empty tag file.
+  # If the flag `relative` is true, the package is treated as being in `cwd`. When developing a project, it wouldn't be
+  # very ergonomical to have the tags pointing to the store, so we use relative paths in the tag file.
+  packageTags = { relative ? false, name, src, ... }:
+  let
+    absoluteOption = if relative then "" else "--tags-absolute";
+  in
+    pkgs.stdenv.mkDerivation {
+      name = "${name}-tags";
+      inherit src;
+      buildInputs = [pkgs.haskellPackages.hasktags pkgs.rsync];
+      phases = ["unpackPhase" "buildPhase"];
+      buildPhase = ''
+        fail() {
+          echo "tags failed for ${name}"
+          rm -f $out/tags
+          touch $out/tags
+        }
+        mkdir -p $out/package
+        rsync --recursive --prune-empty-dirs --filter='. ${rsyncFilter}' . $out/package/
+        cd $out/package
+        hasktags ${hasktagsOptions} ${absoluteOption} --suffixes '[${toString suffixesOption}]' --output $out/tags . || fail
+      '';
+    };
 
   # Takes a list of haskell derivations and produces a list of tag derivations.
-  packageTagss = packages: (map packageTags packages);
+  packageTagss =
+    { relative ? true, targets }:
+    map (p: packageTags ({ inherit relative; } // p)) targets;
 
   # Obtain the dependencies of a haskell derivation.
   inputs = p: p.getBuildInputs.haskellBuildInputs;
 
-  # recursion delegate for `subTree`.
-  accumulatePackage = z: p:
+  # Call a function propagating seen elements and merge its results with the accumulator.
+  accumulateSeen = f: z: a:
   let
-    sub = subTree z.seen p;
+    sub = f z.seen a;
   in
     { inherit (sub) seen; result = z.result ++ sub.result; };
 
+  # Call a function propagating seen elements for each element in the list and accumulate all results.
+  foldSeen = f: seen: as:
+  builtins.foldl' (accumulateSeen f) { inherit seen; result = []; } as;
+
   # recursion delegate for `subTree`.
-  depTags = seen: package:
-  builtins.foldl' accumulatePackage { inherit seen; result = []; } (inputs package);
+  depTree = seen: package:
+  foldSeen subTree seen (inputs package);
 
   # Takes a list of package names and a package and produces a list of tag derivations.
   # The `seen` list is used to skip packages that have been processed before, since packages may occur multiple times
@@ -71,7 +90,7 @@ let
   subTree = seen: package:
   let
     this = packageTags package;
-    deps = depTags ([this] ++ seen) package;
+    deps = depTree ([this] ++ seen) package;
     result = [this] ++ deps.result;
   in
     if builtins.elem package seen
@@ -79,19 +98,27 @@ let
     else { seen = [package] ++ deps.seen; inherit result; };
 
   # Takes a haskell derivation and creates tags for all of its dependencies, including for the argument.
-  # Returns a list of derivations.
-  packageTree = package:
-  (subTree [] package).result;
+  # Returns a list of tag file derivations.
+  packageTree = relative: target:
+  let
+    targetTags = packageTags ({ inherit relative; } // target);
+    depTags = (depTree subTree [target.name] package).result;
+  in
+    [targetTags] ++ depTags;
 
-  # Takes a list of haskell derivations and creates tags for all of their dependencies.
-  # Returns a list of derivations.
-  packageTrees = packages:
-  concatMap packageTree packages;
+  # Takes a list of haskell derivations and creates tags for them and all of their dependencies.
+  # Returns a list of tag file derivations.
+  packageTrees = args@{ targets, relative ? true }:
+  let
+    targetTags = packageTagss args;
+    subTags = foldSeen depTree targets targets;
+  in
+    targetTags ++ subTags.result;
 
   # Takes a list of haskell derivations and produces a list of tag derivations for only the dependencies of the
   # arguments.
-  depTagss = packages:
-  concatMap (p: (depTags [] p).result) packages;
+  depTagss =
+    foldSeen depTree [];
 
   header = pkgs.writeText "tags-header" ''
     !_TAG_FILE_FORMAT       2
@@ -134,11 +161,13 @@ in rec {
     # Tag only dependencies of the derivation argument.
     deps = { targets }: (depTagss targets).result;
 
-    # Tag only the derivation argument's sources.
-    packages = { targets }: packageTagss targets;
+    # Tag only the derivation arguments' sources.
+    # `relative` determines whether the targets should be tagged with relative paths.
+    packages = args@{ targets, relative ? true }: packageTagss args;
 
     # Tag the arguments' sources and their dependencies.
-    all = { targets }: packageTrees targets;
+    # `relative` determines whether the targets should be tagged with relative paths.
+    all = args@{ targets, relative ? true }: packageTrees args;
   };
 
   # Produces a derivation of a combined tag file.
@@ -147,10 +176,12 @@ in rec {
     # Tag only dependencies of the derivation argument.
     deps = { targets }: safeMerge (individual.deps { inherit targets; });
 
-    # Tag only the derivation argument's sources.
-    packages = { targets }: safeMerge (individual.packages { inherit targets; });
+    # Tag only the derivation arguments' sources.
+    # `relative` determines whether the targets should be tagged with relative paths.
+    packages = args@{ targets, relative ? true }: safeMerge (individual.packages args);
 
     # Tag the arguments' sources and their dependencies.
-    all = { targets }: safeMerge (individual.all { inherit targets; });
+    # `relative` determines whether the targets should be tagged with relative paths.
+    all = args@{ targets, relative ? true }: safeMerge (individual.all args);
   };
 }

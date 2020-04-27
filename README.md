@@ -3,12 +3,14 @@
 This nix expression provides a few functions for the creation of [hasktags]
 from a dependency tree of haskell derivations as produced by [cabal2nix].
 
+# Usage
+
 All functions take a list of haskell derivations.
 The functions in `individual` produce lists of derivations, each of which
 contain the tags file for a package, while those in `combined` produce
 a derivation for a merged tag file.
 
-For example:
+## Ad-hoc from the shell
 
 ```shell
 nix-build -A combined.packages --arg targets '[(import <nixpkgs> {}).haskellPackages.aeson]'
@@ -18,7 +20,7 @@ builds only the tags for `aeson` without dependencies, while `combined.all`
 would build its dependencies as well and merge everything into the file `tags`
 in the output store path.
 
-Using it in your project config:
+## In your project config
 
 ```nix
 let
@@ -48,6 +50,28 @@ Now you can generate all project dependencies' tags with:
 
 ```shell
 cp $(nix-build --no-link -A projectTags)/tags .tags
+```
+
+# Relative paths
+
+The tags of the packages you are developing in your project should not be
+pointing to the store, but `nix` will copy them over before running the
+derivation builder.
+
+Therefore all packages passed into the API functions will be tagged with
+relative paths by default, while all dependencies will have absolute paths.
+
+You can override this behaviour by passing `relative = false;` to the
+functions, as in
+
+```nix
+tags.combined.all { inherit targets; relative = false; }
+```
+
+or more granularily by setting the `relative` attribute on a package, like
+
+```nix
+tags.combined.all { targets = [mypackage // { relative = false; }]; }
 ```
 
 [hasktags]: https://hackage.haskell.org/package/hasktags
