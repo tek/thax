@@ -12,7 +12,7 @@ a derivation for a merged tag file.
 
 ## Ad-hoc from the shell
 
-```shell
+```sh
 nix-build -A combined.packages --arg targets '[(import <nixpkgs> {}).haskellPackages.aeson]'
 ```
 
@@ -48,7 +48,7 @@ in
 
 Now you can generate all project dependencies' tags with:
 
-```shell
+```sh
 cp $(nix-build --no-link -A projectTags)/tags .tags
 ```
 
@@ -62,16 +62,25 @@ Therefore all packages passed into the API functions will be tagged with
 relative paths by default, while all dependencies will have absolute paths.
 
 You can override this behaviour by passing `relative = false;` to the
-functions, as in
+functions, as in:
 
 ```nix
 tags.combined.all { inherit targets; relative = false; }
 ```
 
-or more granularily by setting the `relative` attribute on a package, like
+or more granularily by setting the `relative` attribute on a package, like:
 
 ```nix
 tags.combined.all { targets = [mypackage // { relative = false; }]; }
+```
+
+## Directory prefixes
+
+If the relative path isn't enough, because your local packages are located in
+subdirectories, you can set the package's attribute `tagsPrefix` like so:
+
+```nix
+tags.combined.all { targets = [mypackage // { tagsPrefix = "packages/mypack"; }]; }
 ```
 
 [hasktags]: https://hackage.haskell.org/package/hasktags

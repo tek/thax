@@ -38,7 +38,7 @@ let
   # one of the dependencies, so we just print an error message and output an empty tag file.
   # If the flag `relative` is true, the package is treated as being in `cwd`. When developing a project, it wouldn't be
   # very ergonomical to have the tags pointing to the store, so we use relative paths in the tag file.
-  packageTags = { relative ? false, name, src, ... }:
+  packageTags = { relative ? false, tagsPrefix ? "", name, src, ... }:
   let
     absoluteOption = if relative then "" else "--tags-absolute";
   in
@@ -53,8 +53,9 @@ let
           rm -f $out/tags
           touch $out/tags
         }
-        mkdir -p $out/package
-        rsync --recursive --prune-empty-dirs --filter='. ${rsyncFilter}' . $out/package/
+        package=$out/package/${tagsPrefix}
+        mkdir -p $package
+        rsync --recursive --prune-empty-dirs --filter='. ${rsyncFilter}' . $package/
         cd $out/package
         hasktags ${hasktagsOptions} ${absoluteOption} --suffixes '[${toString suffixesOption}]' --output $out/tags . || fail
       '';
