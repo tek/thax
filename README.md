@@ -68,7 +68,7 @@ functions, as in:
 tags.combined.all { inherit targets; relative = false; }
 ```
 
-or more granularily by setting the `relative` attribute on a package, like:
+or more granularly by setting the `relative` attribute on a package, like:
 
 ```nix
 tags.combined.all { targets = [mypackage // { relative = false; }]; }
