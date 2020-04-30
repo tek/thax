@@ -68,6 +68,7 @@ let
         package=$out/package/${tagsPrefix}
         mkdir -p $package
         rsync --recursive --prune-empty-dirs --filter='. ${rsyncFilter}' . $package/
+        echo '${hasktagsCmd}' > $out/hasktags-cmd
         cd $out/package
         ${hasktagsCmd} &> $out/hasktagsLog || fail
       '';
