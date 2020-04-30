@@ -153,6 +153,7 @@ let
         cat ${header} > $out/tags
         echo $out >> $out/tags
         sort --unique ${toString tags} | grep -v '^!_TAG' >> $out/tags
+        echo "${builtins.concatStringsSep "\n" tags}" > $out/parts
       '';
     };
 
