@@ -164,9 +164,14 @@ let
     mergePart = ps:
       if (builtins.length ps > limit)
       then [(merge (take limit ps))] ++ (mergePart (drop limit ps))
+      else if (builtins.length ps == 1)
+      then ps
       else [(merge ps)];
+    merged = mergePart packages;
   in
-    merge (mergePart packages);
+  if (builtins.length merged == 1)
+  then builtins.head merged
+  else merge (mergePart packages);
 
 in rec {
   # Produce lists of single-package tag file derivations.
