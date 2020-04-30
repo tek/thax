@@ -139,7 +139,7 @@ let
       buildPhase = ''
         mkdir -p $out
         cat ${header} > $out/tags
-        sort --unique ${toString tags} | grep -v '^!_TAG' > $out/tags
+        sort --unique ${toString tags} | grep -v '^!_TAG' >> $out/tags
       '';
     };
 
