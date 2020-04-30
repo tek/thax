@@ -5,6 +5,14 @@
 }:
 with pkgs.lib.lists;
 let
+  hasktagsSrc = pkgs.fetchFromGitHub {
+    owner = "tek";
+    repo = "hasktags";
+    rev = "force-utf8";
+    sha256 = "140hjvgxyiqczjnssnasi1bv74sam6gfpvd5aazz0xsf4id7nqvv";
+  };
+
+  hasktags = pkgs.haskellPackages.callCabal2nix "name" hasktagsSrc {};
 
   # Create a string from the suffixes.
   concatSuffixes =
@@ -27,7 +35,9 @@ let
   '';
 
   # hasktags takes a haskell list for the --suffixes option for some reason.
-  suffixesOption = concatSuffixes ", " (s: ''".${s}"'');
+  suffixesOption =
+    let sxs = toString (concatSuffixes ", " (s: ''".${s}"''));
+    in  "'[${sxs}]'";
 
   # Takes a haskell derivation and produces another derivation that reuses the `src` attribute to create tags.
   # The sources are unpacked and filtered so only non-test etc. haskell files (selected by the global parameter
@@ -41,11 +51,13 @@ let
   packageTags = { relative ? false, tagsPrefix ? "", name, src, ... }:
   let
     absoluteOption = if relative then "" else "--tags-absolute";
+    options = "${hasktagsOptions} ${absoluteOption}";
+    hasktagsCmd = "${hasktags}/bin/hasktags ${options} --suffixes ${suffixesOption} --output $out/tags .";
   in
     pkgs.stdenv.mkDerivation {
       name = "${name}-tags";
       inherit src;
-      buildInputs = [pkgs.haskellPackages.hasktags pkgs.rsync];
+      buildInputs = [hasktags pkgs.rsync];
       phases = ["unpackPhase" "buildPhase"];
       buildPhase = ''
         fail() {
@@ -57,7 +69,7 @@ let
         mkdir -p $package
         rsync --recursive --prune-empty-dirs --filter='. ${rsyncFilter}' . $package/
         cd $out/package
-        hasktags ${hasktagsOptions} ${absoluteOption} --suffixes '[${toString suffixesOption}]' --output $out/tags . || fail
+        ${hasktagsCmd} &> $out/hasktagsLog || fail
       '';
     };
 
