@@ -137,7 +137,7 @@ let
     !_TAG_FILE_FORMAT       2
     !_TAG_FILE_SORTED       1
     !_TAG_PROGRAM_NAME      hasktags
-  '';
+    !_TAG_STORE_PATH        '';
 
   # cat all package tags into one file.
   # Removes individual files' headers and adds a global one.
@@ -151,6 +151,7 @@ let
       buildPhase = ''
         mkdir -p $out
         cat ${header} > $out/tags
+        echo $out >> $out/tags
         sort --unique ${toString tags} | grep -v '^!_TAG' >> $out/tags
       '';
     };
