@@ -1,6 +1,6 @@
 {
   pkgs ? import <nixpkgs> {},
-  hasktagsOptions ? "--ctags --follow-symlinks --extendedctag",
+  hasktagsOptions ? "--ctags --follow-symlinks",
   suffixes ? ["hs" "lhs" "hsc"],
 }:
 with pkgs.lib.lists;
