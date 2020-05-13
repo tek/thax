@@ -58,12 +58,11 @@ let
   # one of the dependencies, so we just print an error message and output an empty tag file.
   # If the flag `relative` is true, the package is treated as being in `cwd`. When developing a project, it wouldn't be
   # very ergonomical to have the tags pointing to the store, so we use relative paths in the tag file.
-  packageTags = { relative ? false, tagsPrefix ? "", name, src, ... }:
+  packageTags = { relative ? false, tagsPrefix ? "", isGhc ? false, name, src, ... }:
   let
     absoluteOption = if relative then "" else "--tags-absolute";
     options = "${hasktagsOptions} ${absoluteOption}";
     hasktagsCmd = "${hasktags}/bin/hasktags ${options} --suffixes ${suffixesOption} --output $out/tags .";
-    isGhc = hasPrefix "ghc-" name;
   in
     pkgs.stdenv.mkDerivation {
       name = "${name}-tags";
@@ -137,7 +136,7 @@ let
   let
     targetTags = packageTagss { inherit targets relative; };
     subTags = foldSeen depTree targets targets;
-    baseTags = if base then [(packageTags pkgs.haskell.compiler.${compiler})] else [];
+    baseTags = if base then [(packageTags pkgs.haskell.compiler.${compiler} // { isGhc = true; })] else [];
   in
     targetTags ++ subTags.result ++ baseTags;
 
