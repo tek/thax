@@ -10,6 +10,12 @@ The functions in `individual` produce lists of derivations, each of which
 contain the tags file for a package, while those in `combined` produce
 a derivation for a merged tag file.
 
+There are three functions in each of those two sets:
+
+* `deps` generates tags for only the dependencies
+* `packages` generates tags for only the targets
+* `all` combines the above
+
 ## Ad-hoc from the shell
 
 ```sh
@@ -81,6 +87,16 @@ subdirectories, you can set the package's attribute `tagsPrefix` like so:
 
 ```nix
 tags.combined.all { targets = [mypackage // { tagsPrefix = "packages/mypack"; }]; }
+```
+
+## GHC
+
+Since `base` et al. aren't regular dependencies, the `all` function will
+include the GHC sources.
+If that is not desired, you can deactivate it:
+
+```nix
+tags.combined.all { inherit targets; base = false; }
 ```
 
 [hasktags]: https://hackage.haskell.org/package/hasktags

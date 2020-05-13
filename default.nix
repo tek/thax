@@ -2,9 +2,12 @@
   pkgs ? import <nixpkgs> {},
   hasktagsOptions ? "--ctags --follow-symlinks",
   suffixes ? ["hs" "lhs" "hsc"],
+  compiler ? "ghc865",
 }:
 with pkgs.lib.lists;
 let
+  inherit (pkgs.lib.strings) hasPrefix;
+
   hasktagsSrc = pkgs.fetchFromGitHub {
     owner = "tek";
     repo = "hasktags";
@@ -22,12 +25,19 @@ let
   # Format rsync filter rules for haskell files with the desired `suffixes`.
   suffixesFilter = concatSuffixes "\n" (s: "+ *.${s}");
 
+  rsyncFilterGhc = ''
+    - compiler/
+    - utils/
+    - Cabal/
+  '';
+
   # rsync filter rule file that leaves only haskell library sources, selected by the global parameter `suffixes`.
-  rsyncFilter = pkgs.writeText "tags-rsync-filter" ''
+  rsyncFilter = ghc: pkgs.writeText "tags-rsync-filter" ''
     - examples/
     - benchmarks/
     - test/
     - tests/
+    ${if ghc then rsyncFilterGhc else ""}
     - Setup.hs
     + */
     ${suffixesFilter}
@@ -53,6 +63,7 @@ let
     absoluteOption = if relative then "" else "--tags-absolute";
     options = "${hasktagsOptions} ${absoluteOption}";
     hasktagsCmd = "${hasktags}/bin/hasktags ${options} --suffixes ${suffixesOption} --output $out/tags .";
+    isGhc = hasPrefix "ghc-" name;
   in
     pkgs.stdenv.mkDerivation {
       name = "${name}-tags";
@@ -67,7 +78,7 @@ let
         }
         package=$out/package/${tagsPrefix}
         mkdir -p $package
-        rsync --recursive --prune-empty-dirs --filter='. ${rsyncFilter}' . $package/
+        rsync --recursive --prune-empty-dirs --filter='. ${rsyncFilter isGhc}' . $package/
         echo '${hasktagsCmd}' > $out/hasktags-cmd
         cd $out/package
         ${hasktagsCmd} &> $out/hasktagsLog || fail
@@ -122,12 +133,13 @@ let
 
   # Takes a list of haskell derivations and creates tags for them and all of their dependencies.
   # Returns a list of tag file derivations.
-  packageTrees = args@{ targets, relative ? true }:
+  packageTrees = args@{ targets, relative ? true, base ? true }:
   let
-    targetTags = packageTagss args;
+    targetTags = packageTagss { inherit targets relative; };
     subTags = foldSeen depTree targets targets;
+    baseTags = if base then [(packageTags pkgs.haskell.compiler.${compiler})] else [];
   in
-    targetTags ++ subTags.result;
+    targetTags ++ subTags.result ++ baseTags;
 
   # Takes a list of haskell derivations and produces a list of tag derivations for only the dependencies of the
   # arguments.
@@ -188,7 +200,7 @@ in rec {
 
     # Tag the arguments' sources and their dependencies.
     # `relative` determines whether the targets should be tagged with relative paths.
-    all = args@{ targets, relative ? true }: packageTrees args;
+    all = args@{ targets, relative ? true, base ? true }: packageTrees args;
   };
 
   # Produces a derivation of a combined tag file.
@@ -203,6 +215,6 @@ in rec {
 
     # Tag the arguments' sources and their dependencies.
     # `relative` determines whether the targets should be tagged with relative paths.
-    all = args@{ targets, relative ? true }: safeMerge (individual.all args);
+    all = args@{ targets, relative ? true, base ? true }: safeMerge (individual.all args);
   };
 }
