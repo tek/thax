@@ -188,6 +188,8 @@ let
   else merge (mergePart packages);
 
 in rec {
+  inherit safeMerge packageTags;
+
   # Produce lists of single-package tag file derivations.
   # Each derivation's output contains a directory named `package` for the sources and a file named `tags`.
   individual = {
