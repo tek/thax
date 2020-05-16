@@ -63,6 +63,8 @@ let
     absoluteOption = if relative then "" else "--tags-absolute";
     options = "${hasktagsOptions} ${absoluteOption}";
     hasktagsCmd = "${hasktags}/bin/hasktags ${options} --suffixes ${suffixesOption} --output $out/tags .";
+    # hasktags sometimes produces lines with only an identifier
+    garbageFilter = "^\\S*$";
   in
     pkgs.stdenv.mkDerivation {
       name = "${name}-tags";
@@ -78,9 +80,12 @@ let
         package=$out/package/${tagsPrefix}
         mkdir -p $package
         rsync --recursive --prune-empty-dirs --filter='. ${rsyncFilter isGhc}' . $package/
-        echo '${hasktagsCmd}' > $out/hasktags-cmd
+        cat > $out/hasktags-cmd <<'EOF'
+        ${hasktagsCmd}
+        EOF
         cd $out/package
         ${hasktagsCmd} &> $out/hasktagsLog || fail
+        sed -i '/${garbageFilter}/d' $out/tags
       '';
     };
 
