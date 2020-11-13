@@ -112,6 +112,9 @@ let
   depTree = seen: package:
   foldSeen subTree seen (inputs package);
 
+  srcSeen = package:
+  builtins.any (s: s.src == package.src);
+
   # Takes a list of package names and a package and produces a list of tag derivations.
   # The `seen` list is used to skip packages that have been processed before, since packages may occur multiple times
   # in a dependency tree.
@@ -122,7 +125,7 @@ let
     deps = depTree ([this] ++ seen) package;
     result = [this] ++ deps.result;
   in
-    if builtins.elem package seen
+    if srcSeen package seen
     then { inherit seen; result = []; }
     else { seen = [package] ++ deps.seen; inherit result; };
 
