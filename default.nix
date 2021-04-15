@@ -2,7 +2,7 @@
   pkgs ? import <nixpkgs> {},
   hasktagsOptions ? "--ctags --follow-symlinks",
   suffixes ? ["hs" "lhs" "hsc"],
-  compiler ? "ghc865",
+  compiler ? "ghc8104",
 }:
 with pkgs.lib.lists;
 let

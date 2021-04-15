@@ -22,7 +22,7 @@ There are three functions in each of those two sets:
 nix-build -A combined.packages --arg targets '[(import <nixpkgs> {}).haskellPackages.aeson]'
 ```
 
-builds only the tags for `aeson` without dependencies, while `combined.all`
+Builds only the tags for `aeson` without dependencies, while `combined.all`
 would build its dependencies as well and merge everything into the file `tags`
 in the output store path.
 
@@ -32,7 +32,7 @@ in the output store path.
 let
   pkgs = import <nixpkgs> {};
   tags = import (fetchTarball "https://github.com/tek/thax/tarball/master") { inherit pkgs; };
-  packages = "???"; # however your project is set up
+  packages = [(pkgs.haskellPackages.callCabal2nix "spaceship" ./. {})]; # however your project is set up
 in {
   projectTags = tags.combined.all { targets = packages; };
 }
