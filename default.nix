@@ -15,7 +15,7 @@ let
     sha256 = "140hjvgxyiqczjnssnasi1bv74sam6gfpvd5aazz0xsf4id7nqvv";
   };
 
-  hasktags = pkgs.haskell.packages.${compiler}.callCabal2nix "hasktags" hasktagsSrc {};
+  hasktags = pkgs.haskell.lib.doJailbreak (pkgs.haskell.packages.${compiler}.callCabal2nix "hasktags" hasktagsSrc {});
 
   # Create a string from the suffixes.
   concatSuffixes =
