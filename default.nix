@@ -31,12 +31,16 @@ let
     - Cabal/
   '';
 
-  # rsync filter rule file that leaves only haskell library sources, selected by the global parameter `suffixes`.
-  rsyncFilter = ghc: pkgs.writeText "tags-rsync-filter" ''
-    - examples/
-    - benchmarks/
+  testsFilter = ''
     - test/
     - tests/
+  '';
+
+  # rsync filter rule file that leaves only haskell library sources, selected by the global parameter `suffixes`.
+  rsyncFilter = target: ghc: pkgs.writeText "tags-rsync-filter" ''
+    - examples/
+    - benchmarks/
+    ${if target then "" else testsFilter}
     ${if ghc then rsyncFilterGhc else ""}
     - Setup.hs
     + */
@@ -58,7 +62,7 @@ let
   # one of the dependencies, so we just print an error message and output an empty tag file.
   # If the flag `relative` is true, the package is treated as being in `cwd`. When developing a project, it wouldn't be
   # very ergonomical to have the tags pointing to the store, so we use relative paths in the tag file.
-  packageTags = { relative ? false, tagsPrefix ? "", isGhc ? false, name, src, ... }:
+  packageTags = { relative ? false, tagsPrefix ? "", isGhc ? false, target ? false, name, src, ... }:
   let
     absoluteOption = if relative then "" else "--tags-absolute";
     options = "${hasktagsOptions} ${absoluteOption}";
@@ -79,7 +83,7 @@ let
         }
         package=$out/package/${tagsPrefix}
         mkdir -p $package
-        rsync --recursive --prune-empty-dirs --filter='. ${rsyncFilter isGhc}' . $package/
+        rsync --recursive --prune-empty-dirs --filter='. ${rsyncFilter target isGhc}' . $package/
         cat > $out/hasktags-cmd <<'EOF'
         ${hasktagsCmd}
         EOF
@@ -92,7 +96,7 @@ let
   # Takes a list of haskell derivations and produces a list of tag derivations.
   packageTagss =
     { relative ? true, targets }:
-    map (p: packageTags ({ inherit relative; } // p)) targets;
+    map (p: packageTags ({ inherit relative; target = true; } // p)) targets;
 
   # Obtain the dependencies of a haskell derivation.
   inputs = p: p.getBuildInputs.haskellBuildInputs;
@@ -140,7 +144,7 @@ let
 
   # Takes a list of haskell derivations and creates tags for them and all of their dependencies.
   # Returns a list of tag file derivations.
-  packageTrees = args@{ targets, relative ? true, base ? true }:
+  packageTrees = { targets, relative ? true, base ? true }:
   let
     targetTags = packageTagss { inherit targets relative; };
     subTags = foldSeen depTree targets targets;
