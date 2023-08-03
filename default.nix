@@ -4,18 +4,25 @@
   suffixes ? ["hs" "lhs" "hsc"],
   compiler ? "ghc8104",
 }:
-with pkgs.lib.lists;
 let
-  inherit (pkgs.lib.strings) hasPrefix;
+  inherit (pkgs.lib) take drop versionAtLeast optionalAttrs;
 
   hasktagsSrc = pkgs.fetchFromGitHub {
-    owner = "tek";
+    owner = "MarcWeber";
     repo = "hasktags";
-    rev = "force-utf8";
-    sha256 = "140hjvgxyiqczjnssnasi1bv74sam6gfpvd5aazz0xsf4id7nqvv";
+    rev = "a5c4b5e7cfc9cfa45fa7e3db6ec0f347a3d73e99";
+    sha256 = "sha256-cFS8lieBsXbdvVSWmn9kTt2Km38ChENOcxJNKv2z750=";
   };
 
-  hasktags = pkgs.haskell.lib.doJailbreak (pkgs.haskell.packages.${compiler}.callCabal2nix "hasktags" hasktagsSrc {});
+  htGhc = pkgs.haskell.packages.${compiler}.override {
+    overrides = self: super: {
+      hasktags = self.callCabal2nix "hasktags" hasktagsSrc {};
+    } // optionalAttrs (versionAtLeast super.ghc.version "9.4") {
+      microlens-platform = pkgs.haskell.lib.doJailbreak super.microlens-platform;
+    };
+  };
+
+  hasktags = htGhc.hasktags;
 
   # Create a string from the suffixes.
   concatSuffixes =
@@ -132,15 +139,6 @@ let
     if srcSeen package seen
     then { inherit seen; result = []; }
     else { seen = [package] ++ deps.seen; inherit result; };
-
-  # Takes a haskell derivation and creates tags for all of its dependencies, including for the argument.
-  # Returns a list of tag file derivations.
-  packageTree = relative: target:
-  let
-    targetTags = packageTags ({ inherit relative; } // target);
-    depTags = (depTree subTree [target.name] package).result;
-  in
-    [targetTags] ++ depTags;
 
   # Takes a list of haskell derivations and creates tags for them and all of their dependencies.
   # Returns a list of tag file derivations.
