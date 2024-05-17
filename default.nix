@@ -3,6 +3,7 @@
   hasktagsOptions ? "--ctags --follow-symlinks",
   suffixes ? ["hs" "lhs" "hsc"],
   compiler ? "ghc8104",
+  hasktagsCompiler ? compiler,
 }:
 let
   inherit (pkgs.lib) take drop versionAtLeast optionalAttrs;
@@ -14,7 +15,7 @@ let
     sha256 = "sha256-cFS8lieBsXbdvVSWmn9kTt2Km38ChENOcxJNKv2z750=";
   };
 
-  htGhc = pkgs.haskell.packages.${compiler}.override {
+  htGhc = pkgs.haskell.packages.${hasktagsCompiler}.override {
     overrides = self: super: {
       hasktags = self.callCabal2nix "hasktags" hasktagsSrc {};
     } // optionalAttrs (versionAtLeast super.ghc.version "9.4") {
