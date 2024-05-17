@@ -4,26 +4,19 @@
   suffixes ? ["hs" "lhs" "hsc"],
   compiler ? "ghc8104",
   hasktagsCompiler ? compiler,
+  hasktagsPackage ? null,
 }:
 let
-  inherit (pkgs.lib) take drop versionAtLeast optionalAttrs;
-
-  hasktagsSrc = pkgs.fetchFromGitHub {
-    owner = "MarcWeber";
-    repo = "hasktags";
-    rev = "a5c4b5e7cfc9cfa45fa7e3db6ec0f347a3d73e99";
-    sha256 = "sha256-cFS8lieBsXbdvVSWmn9kTt2Km38ChENOcxJNKv2z750=";
-  };
+  inherit (pkgs.lib) take drop;
 
   htGhc = pkgs.haskell.packages.${hasktagsCompiler}.override {
-    overrides = self: super: {
-      hasktags = self.callCabal2nix "hasktags" hasktagsSrc {};
-    } // optionalAttrs (versionAtLeast super.ghc.version "9.4") {
-      microlens-platform = pkgs.haskell.lib.doJailbreak super.microlens-platform;
-    };
+    overrides = self: super: {};
   };
 
-  hasktags = htGhc.hasktags;
+  hasktags =
+    if hasktagsPackage == null
+    then htGhc.hasktags
+    else hasktagsPackage;
 
   # Create a string from the suffixes.
   concatSuffixes =
@@ -198,7 +191,7 @@ let
   else merge (mergePart packages);
 
 in rec {
-  inherit safeMerge packageTags;
+  inherit safeMerge packageTags hasktags;
 
   # Produce lists of single-package tag file derivations.
   # Each derivation's output contains a directory named `package` for the sources and a file named `tags`.
